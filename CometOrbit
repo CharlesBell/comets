@@ -1,0 +1,956 @@
+package comets
+
+import java.text.*;
+import java.util.*;
+
+/** 
+    Note: This program does not calculate non gravitational effects on comets
+    
+    References:
+    Mechanics 3rd Edition by Keith R. Simon, Addison-Wesley Publishing 1971
+    The Foundations of Celestial Mechanics - George W. Collins, II, Pachart Publishing House 2004 Chapter 6
+    Astronomical Algorithmns, Jean Meeus 2nd edition 
+*/
+public class CometOrbit{
+    
+    private Comet comet = null;
+    
+    
+    /** 
+        JPL Constants:
+        Units conversion: 
+        1 AU= 149597870.691 km, 
+        c= 299792.458 km/s, 
+        1 day= 86400.0 s 
+    */
+
+    /** Astronomical unit
+        1 AU= 149597870.691 km */
+    public double au = 149597870.691d;
+    
+    /**  Speed of light
+         c= 299792.458 km/s  
+    */ 
+    public double c = 299792.458d;
+    
+    /** number of seconds in a day 
+        24 x 3600 s = 6400.0 s
+    */
+    public double day = 86400.0d;
+    
+    
+    /**
+        Gauss's constant
+        k = 0.01720209895 radians/day
+        Reference: Chapter 6 eq 6.2.32
+        also in Astronomical Algorithms by Jeans Meeus
+        0.985607666 = number of degrees per day
+        
+        k ~ 2 pi /365.25 radians/day
+    
+        Julian year  y = 365.25 d  
+        sidereal year = 365.25636 d 
+    
+        http://ssd.jpl.nasa.gov/?constants
+        JPL Gaussian gravitational constant k = 0.01720209895 (AU^3/d^2)^0.5  
+        d = 86400 s 
+        heliocentric gravitational constant    
+        GMsun  = k^2 AU^3 d^-2 = 1.32712440018 x 10^20 (± 8 x 10^9) m3 s^-2 
+
+        k is from Kepler's 3rd Law applied to the earth   
+
+        GaussianGravitationalConstant
+        http://scienceworld.wolfram.com/physics/GaussianGravitationalConstant.html
+
+    */
+    double k = 0.01720209895d;
+
+    public CometOrbit(Comet comet){
+        this.comet = comet;        
+    }
+    
+    public boolean isElliptical(){
+        return (comet.getOrbitalEccentricity() < 1.0d);
+    }
+    
+    public boolean isParabolic(){
+        return (comet.getOrbitalEccentricity() == 1.0d);
+    }
+    
+    public boolean isHyperbolic(){
+        return (comet.getOrbitalEccentricity() > 1.0d);
+    }
+    
+    public boolean isNearParabolic(){
+        double e = comet.getOrbitalEccentricity();
+        return ((e  > .98d) && (e < 1.02d) && !isParabolic());
+    }
+    
+    /**
+        Epoch: The epoch of osculation of the orbital elements. 
+        Reference: http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+    */
+    public JulianDay getEpoch(){ 
+        return new JulianDay(comet.getEpochYear(), comet.getEpochMonth(), comet.getEpochDay());
+    }
+    
+    public JulianDay getPerihelionJulianDay(){
+        int perihelionYear = comet.getPerihelionYear();
+        int perihelionMonth = comet.getPerihelionMonth();
+        double perihelionDay = comet.getPerihelionDay();
+        JulianDay perihelion = new JulianDay(perihelionYear, perihelionMonth, perihelionDay);
+        return perihelion;
+    }
+    
+    public double getDaysSincePerihelion(JulianDay jd){
+        double daysSincePerihelion = jd.getJulianDay() - getPerihelionJulianDay().getJulianDay();
+        return daysSincePerihelion;        
+    }
+
+    /** 
+        Reference: 
+        http://asa.usno.navy.mil/SecK/2008/Astronomical_Constants_2008.pdf
+        obliquity of the ecliptic for the standard equinox of J2000.0 
+        epsilon(2000) = 23d 26' 21.448" = 84381.448 arc sec = 23.439291111111111111111111111111  deg
+        http://asa.usno.navy.mil/SecK/Constants.html
+    
+        Reference: 
+        Contributions to the Earth's Obliquity Rate, Precession and Nutation
+        The Astronomical Journal Volume 8 Number 102 August 1994
+        James G. Wiliams, JPL
+        Total Correction to the obliquity is -0.024 arc sec/century
+
+        Reference: 
+        Jean Meeus Astronomical Algorithms Page 228.
+            Obliquity of the ecliptic: epsilon
+            sin(epsilon) = 0.397777156
+            cos(epsilon) = 0.917482062
+    
+        Reference: 
+        Jean Meeus Astronomical Algorithms Page 228.
+        epsilon(jd) = 23.439 - 0.0000004 * (JD2000 -jd)
+        Note: There is no basis provided for this approximation
+    
+        Reference: 
+        http://www.reference.com/browse/obliquity
+        epsilon = 84,381.448 - 46.84024T - (59 × 10-5)T^2 + (1,813 × 10-6)T^3, 
+        measured in seconds of arc, with T being the time in Julian centuries 
+        (that is, 36,525 days) since the ephemeris epoch of 2000 (which occurred on 
+        Julian day 2,451,545.0). A straight application of this formula to 1900 (T=-1) 
+        returns Newcomb's value.
+        Note: There is no basis provided for this polynomal approximation
+                
+        Reference:
+        http://aa.usno.navy.mil/publications/docs/Circular_179.pdf
+        USNO Circular 179 Equation (5.12)
+        The expression for the mean obliquity of the ecliptic (the angle between the mean equator and
+        ecliptic, or, equivalently, between the ecliptic pole and mean celestial pole of date) is:
+        e = e0 - 46.836769 T - 0.0001831 T^2 + 0.00200340 T^3 - 0.000000576 T*4 - 0.0000000434 T*5 (5.12)
+        where, as stated above, e0 = 84381.406 arcseconds. This expression arises from the precession
+        formulation but is actually used only for nutation.
+
+        Reference: 
+        http://ssd.jpl.nasa.gov/?constants
+        obliquity of ecliptic (J2000)    epsilon = 84381.412 (± 0.005) arcsec  
+    */
+    public double getObliquity(){
+        JulianDay jd = getEpoch();
+        double epsilon2000 = 84381.448d;
+        double correction = -0.024d;
+        double epsilon = (epsilon2000 + correction * jd.getJulianMillenia())/3600d;
+        return  Math.toRadians(epsilon);
+    }
+    
+
+    /**
+        z: Reciprocal semimajor axis (in 1/AU). 
+        Reference: http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+    */
+    private double getReciprocalSemiMajorAxis(){
+        double z = -1;
+        double a = getSemiMajorAxis();
+        if ((a < 0d) || (a > 0d)){
+            z = 1d / a;
+        }
+        return z;
+    }
+
+    /**
+        a: Semimajor axis (in AU).
+        Reference: 
+            http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+            Mechanics 3rd Edition by Keith R. Simon, Addison-Wesley Publishing 1971
+
+    */
+    public double getSemiMajorAxis(){
+		if (comet.getOrbitalEccentricity() == 1) System.err.println("semi major axis a is undefined for parabolic orbit e = 1");
+		return comet.getPerihelionDistance() / (1d - comet.getOrbitalEccentricity());
+    }
+
+
+    public double getMeanDailyMotion(){
+        
+        /** 
+            a_earth: semi-major axis of the earth J2000 in au
+            References: 
+                http://ssd.jpl.nasa.gov/txt/p_elem_t1.txt
+                http://ssd.jpl.nasa.gov/txt/aprx_pos_planets.pdf
+        */
+        //double a_earth = 1.00000261d;
+        //Reference: Chapter 6 eq 6.2.21
+        // Note x ^ 3/2 = x^ 1 * x^1/2 = x * sqrt(x)
+        // assuming Msun /Mcomet ~= Msun
+        //  k = sqrt(GMsun)
+        // GMsun = k^2
+        //double a = getSemiMajorAxis();
+        //double n = k/(a^3/2);
+        //double n = k/(a * Math.sqrt(a));
+        //double n = k/(Math.pow(a,3/2);
+        //double n = k/((q/1-e)^3/2);
+        //double n = k/(Math.pow(q/1-e).1/5d);
+        //double n = k/(a/a_earth * Math.sqrt(a/a_earth));
+        double e = comet.getOrbitalEccentricity();
+        double q = comet.getPerihelionDistance();
+
+        double a = q/(1d - e);
+        //System.out.println("a: " + a);
+        double n = 0d;
+        if (e > 1){
+              n = 360d /(365.25d * Math.pow(-a, 1.5d));
+        }else if (e < 1){
+              n = 360d /(365.25d * Math.pow(a, 1.5d));
+        }
+        //System.out.println("n: " + n);
+        return n;
+    }
+
+    /**
+       *  P: Orbital period (in years). 
+        * Reference: http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+        */
+    public double getOrbitalPeriod(){
+        double n = getMeanDailyMotion();
+        double P = 360d/n/365.25d ;
+        return P;
+    }
+    
+	/** 
+		semi parameter p is semi latus rectum of a conic section
+		r = p /  1 + e cos(nu)  
+		p is a measure of the size of the conic section. Larger p means the orbit is larger
+		p = h^2 / mu  
+                                h = specific angular orbital momentum
+                                mu = standard gravitational parameter GM
+		q = a - ae = a ( 1 - e)
+		a = q / ( 1 - e)
+		 
+		for ellipse p = a (1-e^2), 
+			=  q (1 - e)(1 + e)/( 1 - e)
+	                 = q (1 + e)
+		for parabola p = 2q
+		for hyperbola p =  a (1-e^2), 
+			=  q (1 - e)(1 + e)/( 1 - e)
+	                 = q (1 + e)
+	*/
+	public static double getSemiParameter(double q, double e){
+		double p = 0;
+		if (e < 0d) {
+			System.err.println("Error: negative eccentricity: " + e);
+		}else if ((e > 0d) && (e < 1d)) { 
+			p = q * (1d + e);
+		}else if (e == 1) {
+			p = 2 * q;
+		}else if (e > 1d) { 
+			 p = q * (1d + e);
+		}
+		return p;
+	}
+	
+    /**
+        P and Q vectors 
+        The vectors P and Q are an alternate form of representing the angular 
+        elements Peri., Node and Incl. 
+        Reference: http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+        Gaussian Vectors P, Q, and R
+        http://scienceworld.wolfram.com/physics/GaussianVectors.html
+
+    */    
+    public Point3D getVectorP(){
+        
+        /** Obliquity epsilon */
+        double epsilon = getObliquity();
+        
+        /** orbit inclination  */
+        double i = Math.toRadians(comet.getInclination());
+        
+        /** longitudeAscendingNode Capital Omega */
+        double Omega = Math.toRadians(comet.getLongitudeAscendingNode());
+        
+        /** argumentOfPerihelion w or lowwr case omega */
+        double w = Math.toRadians(comet.getArgumentOfPerihelion());
+
+        /** Vector P = (Px, Py, Pz)  */
+        double Px = Math.cos(w) * Math.cos(Omega) - Math.sin(w) * Math.sin(Omega) * Math.cos(i);
+        double Py = Math.cos(epsilon) * (Math.cos(w) * Math.sin(Omega) + Math.sin(w) * Math.cos(Omega) * Math.cos(i))
+            - Math.sin(epsilon) * Math.sin(w) * Math.sin(i);
+        double Pz = Math.sin(epsilon) * (Math.cos(w) * Math.sin(Omega) + Math.sin(w) * Math.cos(Omega) * Math.cos(i))
+            + Math.cos(epsilon) * Math.sin(w) * Math.sin(i);
+        return new Point3D(Px, Py, Pz);
+    }
+
+    /**
+        P and Q vectors 
+        The vectors P and Q are an alternate form of representing the angular 
+        elements Peri., Node and Incl. 
+        Reference: http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+        Reference: Jean Meeus Astronomical Algorithms Page 230.
+        http://scienceworld.wolfram.com/physics/GaussianVectors.html
+
+    */    
+    public Point3D getVectorQ(){
+        /** Obliquity epsilon */
+        double epsilon = getObliquity();
+        
+        /** orbit inclination  */
+        double i = Math.toRadians(comet.getInclination());
+        
+        /** longitudeAscendingNode Capital Omega */
+        double Omega = Math.toRadians(comet.getLongitudeAscendingNode());
+        
+        /** argumentOfPerihelion w or lowwr case omega */
+        double w = Math.toRadians(comet.getArgumentOfPerihelion());
+
+        /** Vector Q = (Qx, Qy, Qz)  */
+        double Qx = - Math.sin(w) * Math.cos(Omega) - Math.cos(w) * Math.sin(Omega) * Math.cos(i);
+        double Qy = Math.cos(epsilon) * (Math.cos(w) * Math.cos(Omega) * Math.cos(i) - Math.sin(w) * Math.sin(Omega))
+            - Math.sin(epsilon) * Math.cos(w) * Math.sin(i);
+        double Qz = Math.sin(epsilon) * (Math.cos(w) * Math.cos(Omega) * Math.cos(i) - Math.sin(w) * Math.sin(Omega))
+            + Math.cos(epsilon) * Math.cos(w) * Math.sin(i);
+        return new Point3D(Qx, Qy, Qz);
+    }
+        /**
+        M: Mean anomaly at the epoch. in degrees
+        Reference: http://www.cfa.harvard.edu/iau/info/OrbElsExplanation.html
+            /** Mean anomaly M
+            M is the angular distance along the cooresponding the osculating circle that an imaginary 
+            particle would have moved during the time t specifying the position of the real particle 
+            on the elliptic orbit.
+            Notes: 
+            The areas swept out are the same in equal times from Kepler.
+            b^2 = a^2(1 - e^2)  or b^2 + (ae)^2 = a^2
+            an ellipse is the projection on the x-y planet of a circle of radius a rotated along its diameter
+            looking along the x axis in the y-z plane 
+            a is the hypotenuse of a right triangle with short sides b and ae
+            M = n t 
+            Reference: Chapter 6 eq 6.2.22
+		//double M = n * deltaT;
+		//    or
+		// double M = n * days since epoch ;
+		//M = m0 if jd = jdepoch
+		//M = 0 if jd = jd perihelion
+	
+		mean anomaly = M = angle from periapsis to the point in auxiliary circle in elliptical orbit
+		= n (t - T)
+
+		M0 = mean anomaly at the epoch of the orbit
+			= angle from periapsis to the point in auxiliary circle at time in orbit
+			M0 / n = days since periapsis for elliptical orbit = (tepoch - T)
+			T = tepoch - M0/n
+
+		E = eccentric anomaly
+			Kepler's equation for elliptical orbits
+				E = M + e sin(E)
+
+
+    */
+    public double getMeanAnomaly(JulianDay jd){
+        double daysSincePerihelion = getDaysSincePerihelion(jd);
+        double n = getMeanDailyMotion();
+        double M = daysSincePerihelion * n;
+        /* Note: units for M here is in degrees */
+        return M;
+    }
+
+    /** 
+		input M in degrees is converted to mean_anom in radians
+		Eccentric Anomaly  in radians is calculated and returned
+		MeanAnomaly M in degrees is converted from input in degrees
+		eccentricity ecc 
+		Translated from The Guide kepler.c
+		http://www.projectpluto.com/kepler.htm
+		M is Mean Anomaly
+		E is Eccentric Anomaly
+		r = a (1 - e cosE)
+	*/
+	public  double getEccentricAnomaly(double ecc, double M){
+		double mean_anom = Math.toRadians(M);
+		double E = 0d;
+		double curr = 0;
+		double err = 0d;
+		//double THRESH = 1.0E-15;
+		double THRESH = 1.0E-8;
+		double thresh = 1d;
+		boolean is_negative = false;
+		int n_iter = 0;
+		if (ecc == 1) System.err.println("Eccentric Anomaly for parabolic orbit e = 1 is zero");
+		/* low-eccentricity formula from Meeus,  p. 195 */
+		if(ecc < 0.3d) {
+			curr = Math.atan2( Math.sin(mean_anom), Math.cos( mean_anom) - ecc);
+			/* one correction step,  and we're done */
+			err = curr - ecc * Math.sin(curr) - mean_anom;
+			curr -= err / (1d - ecc * Math.cos(curr));
+			return( curr);
+		}
+
+		if( mean_anom < 0) {
+			mean_anom = -mean_anom;
+			is_negative = true;
+		}
+
+		curr = mean_anom;
+		thresh = THRESH * Math.abs( 1d - ecc);
+		/* up to 60 degrees */
+		if( ecc > 0.8d && mean_anom < Math.PI / 3d || ecc > 1d) {
+			double trial = mean_anom / Math.abs( 1d - ecc);
+			/* cubic term is dominant */
+			if(trial * trial > 6d * Math.abs(1d - ecc)){
+				 if( mean_anom < Math.PI){
+					trial = Math.cbrt(6d * mean_anom);
+				 }else{
+					 /* hyperbolic w/ 5th & higher-order terms predominant */
+					 // asinh(x) = log(x + sqrt( x * x + 1))
+					 double z = mean_anom / ecc;
+					trial = Math.log(z + Math.sqrt(z * z + 1d));
+				 }
+			}
+			curr = trial;
+		}
+
+		if( ecc < 1d){
+			err = curr - ecc * Math.sin( curr) - mean_anom;
+			while( Math.abs( err) > thresh){
+				n_iter++;
+				curr -= err / (1. - ecc * Math.cos( curr));
+				err = curr - ecc * Math.sin( curr) - mean_anom;
+			}
+		}else{
+			err = ecc * Math.sinh( curr) - curr - mean_anom;
+			while( Math.abs( err) > thresh){
+				n_iter++;
+				curr -= err / (ecc * Math.cosh( curr) - 1d);
+				err = ecc * Math.sinh(curr) - curr - mean_anom;
+			}
+		}
+		return( is_negative ? -curr : curr);
+	}
+
+    /**         
+        True anomaly denoted by the Greek letter V (nu)
+        angle (in degrees) from point of perihelion to the object
+        starting point is point of perihelion passage
+        E: Eccentric Anomaly in radians
+        e: eccentricity
+    */
+    public double getNu(double e, double E){
+        double nu = 0d;
+        if (e == 1d) return -99d;
+        /** calculate nu from e and E
+            References: 
+                Chapter 6 eq 6.2.27 (elliptical orbit)
+                Chapter 6 eq 6.2.28 (hyperbolic orbit)
+        */
+        if ((comet.getOrbitType().equals("P")) || (isElliptical())){
+            /** elliptical orbit */
+            nu = 2d * Math.atan(Math.sqrt((1d + e)/(1d - e)) * Math.tan(E/2d));
+        }else if (isHyperbolic()){
+            nu = 2d * Math.atan(Math.sqrt((e + 1d)/(e  - 1d)) * Math.tanh(E/2d));
+        }
+        return Math.toDegrees(nu);
+    }
+
+    /**         
+        True anomaly denoted by the Greek letter V (nu)
+        angle (in degrees) from point of perihelion to the object
+        starting point is point of perihelion passage
+        E: Eccentric Anomaly in readians
+        e: eccentricity
+        This method determines nu for parabolic orbits.
+    */
+    public double getNu(double e, double q, JulianDay jd){
+        double nu = 0d;
+        //Note 3k/sqrt(2) = 0.03649116245;
+        double timeSincePerihelion = getDaysSincePerihelion(jd);
+        if (isParabolic()){
+            double c = 3d * k / Math.sqrt(2d);
+            double w = c * timeSincePerihelion / (q * Math.sqrt(q));
+            // Barker's equation s^3 + 3s - W = 0
+            double g = w/2d;
+            double y = Math.cbrt(g + Math.sqrt(g * g + 1d));
+            double s = y - 1d /y;
+            nu = 2d * Math.atan(s);
+        }
+        return Math.toDegrees(nu);
+    }
+    
+    /**
+        scalar r in au
+    */
+    public double getR(double q, double e, double nu){
+        double r = 0d;
+        /** For planets and minor planets which all have elliptical orbits
+                r = a (1 - e cos(E))
+        
+                Reference: Chapter 30 eq 30.2 and Chapter 35
+                for non-parabolic comets robits: 
+                                  q ( 1 + e)
+                            r = ---------------
+                                 1 + e cos(nu)
+                Reference: Astronomical Algorithms Jean Meeus Chapter 30 eq 30.4
+            */
+        
+        if (comet.getOrbitType().equals("P")){
+            r = q * (1d + e)/(1d + e * Math.cos(Math.toRadians(nu)));
+        }else if (isParabolic()){            
+            double s = Math.tan(Math.toRadians(nu)/2d);
+            r = q * (1d + s * s);
+        }else if (isElliptical()){ 
+            r = q * (1d + e)/(1d + e * Math.cos(Math.toRadians(nu)));
+        }else if (isHyperbolic()){  
+            r = q * (1d + e)/(1d + e * Math.cos(Math.toRadians(nu)));
+        }else{
+            // default just in case near parabolic orbit limits do not cover all C orbit types
+            r = q * (1d + e) /(1d + e * Math.cos(Math.toRadians(nu)));
+        }
+        return r;
+    }
+    
+    /**
+        Scalar velocity in km/sec
+    */
+    public double getVelocity(JulianDay jd){
+        JulianDay jd1 = new JulianDay(jd.getJulianDay() - 0.5d);
+        JulianDay jd2 = new JulianDay(jd.getJulianDay() + 0.5d);
+        Point3D cometPosition1 = getHeliocentricPosition(jd1);
+        Point3D cometPosition2 = getHeliocentricPosition(jd2);
+        double deltaX = cometPosition2.getX() - cometPosition1.getX();
+        double deltaY = cometPosition2.getY() - cometPosition1.getY();
+        double deltaZ = cometPosition2.getZ() - cometPosition1.getZ();
+        double xPrime = au* deltaX/day;
+        double yPrime = au* deltaY/day;
+        double zPrime = au* deltaZ/day;
+        return au * Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ) /day;
+    }
+    
+    
+    /**      Orbit position Vector  (x, y) 
+		Planar Coordinates
+	*/
+    public Point2D getOrbitPlanePosition(JulianDay jd){
+        
+        /** orbital eccentricty e */
+        double e = comet.getOrbitalEccentricity();
+
+        /** perihelion distance q */
+        double q = comet.getPerihelionDistance();
+        
+        /** True anomaly (nu) in degrees*/
+        double nu = 0d;
+        
+        if (isParabolic()) {
+            nu = getNu(e, q, jd);
+        }else{
+            double M = getMeanAnomaly(jd);
+            double E = getEccentricAnomaly(e, M);
+            nu = getNu(e, E);
+        }
+        
+        /** heliocentric distance to comet r in au */
+        double r = getR(q, e, nu);
+        double x = r * Math.cos(Math.toRadians(nu));
+        double y = r * Math.sin(Math.toRadians(nu));
+        return new Point2D(x,y);
+    }
+    /**      Orbit plane velocity Vector  (u, v) 
+		Planar Coordinates
+	*/
+    public Vector2D getOrbitPlaneVelocity(JulianDay jd){
+        
+        /** orbital eccentricty e */
+        double e = comet.getOrbitalEccentricity();
+
+        /** perihelion distance q */
+        double q = comet.getPerihelionDistance();
+        
+        /** True anomaly (nu) in degrees*/
+        double nu = 0d;
+        
+        if (isParabolic()) {
+            nu = getNu(e, q, jd);
+        }else{
+            double M = getMeanAnomaly(jd);
+            double E = getEccentricAnomaly(e, M);
+            nu = getNu(e, E);
+        }
+        
+        /** heliocentric distance to comet r in au */
+        double r = getR(q, e, nu);
+        double x = r * Math.cos(Math.toRadians(nu));
+        double y = r * Math.sin(Math.toRadians(nu));
+        double kGauss = 0.01720209895d;
+
+        double GMsun = kGauss*kGauss;
+	double 	GM = 2.9630927492415936E-04;
+
+        // mu = Gravitational parameter (GM) of primary body
+        double mu = GMsun;
+        double vxp = 0d;
+        double vyp = 0d;
+        if (e < 1d){
+            double M = getMeanAnomaly(jd);
+            double E = getEccentricAnomaly(e, M);
+            vxp = -Math.sqrt(1d -  Math.cos(E) *  Math.cos(E)) * Math.sqrt(mu* (1 - e)/q) / (1d - e *  Math.cos(E));
+            vyp = Math.sqrt(1d - e*e) *  Math.cos(E) * Math.sqrt(mu* (1 - e)/q) / (1d - e *  Math.cos(E));
+        }else if (e == 1d){
+            double vr = Math.sqrt(mu/(2d*q)) * (e * Math.sin(nu));
+		double vt = Math.sqrt(mu/(2d*q)) * (1d + e * Math.cos(nu));
+            vxp = Math.cos(nu) * vr - Math.sin(nu) * vt;
+            vyp = Math.sin(nu) * vr + Math.cos(nu) * vt;
+        }else if (e > 1d){
+            double semiparameter = CometOrbit.getSemiParameter(q, e);
+            double vr = Math.sqrt(mu/semiparameter) * (e * Math.sin(nu));
+            double vt = Math.sqrt(mu/semiparameter) * (1d + e * Math.cos(nu));
+            vxp = Math.cos(nu) * vr - Math.sin(nu) * vt;
+            vyp = Math.sin(nu) * vr + Math.cos(nu) * vt;
+        }
+        return new Vector2D(vxp, vyp);
+    }
+    
+        /** True Anomaly nu 
+
+	*/
+	public double getTrueAnomaly(JulianDay jd){
+		/** orbital eccentricty e */
+		double e = comet.getOrbitalEccentricity();
+
+		/** perihelion distance q */
+		double q = comet.getPerihelionDistance();
+		
+		/** True anomaly (nu) in degrees*/
+		double nu = 0d;
+
+		if (isParabolic()) {
+		    nu = getNu(e, q, jd);
+		}else{
+		    double M = getMeanAnomaly(jd);
+		    double E = getEccentricAnomaly(e, M);
+		    nu = getNu(e, E);
+		}
+	
+		return nu;
+	}
+
+	/**	 Heliocentric Equatorial position Vector  (x, y, z) 
+		//Equatorial Coordinates
+	*/
+	public Point3D getHeliocentricPosition(JulianDay jd){
+        
+		return getHeliocentricEquatorialPosition(jd);
+	}
+
+		/** Heliocentric position Vector  (x, y, z) 
+		//Equatorial Coordinates
+	*/
+	public Point3D getHeliocentricEquatorialPosition(JulianDay jd){
+        
+		/** orbital eccentricty e */
+		double e = comet.getOrbitalEccentricity();
+
+		/** perihelion distance q */
+		double q = comet.getPerihelionDistance();
+		
+		/** True anomaly (nu) in degrees*/
+		double nu = 0d;
+        
+		if (isParabolic()) {
+		    nu = getNu(e, q, jd);
+		}else{
+		    double M = getMeanAnomaly(jd);
+		    double E = getEccentricAnomaly(e, M);
+		    nu = getNu(e, E);
+		}
+        
+		/** heliocentric distance to comet r in au */
+		double r = getR(q, e, nu);
+		Point3D P = getVectorP();
+		Point3D Q = getVectorQ();
+
+		double x = r * (P.getX() * Math.cos(Math.toRadians(nu)) + Q.getX() * Math.sin(Math.toRadians(nu)));
+		double y = r * (P.getY() * Math.cos(Math.toRadians(nu)) + Q.getY() * Math.sin(Math.toRadians(nu)));
+		double z = r * (P.getZ() * Math.cos(Math.toRadians(nu)) + Q.getZ() * Math.sin(Math.toRadians(nu)));
+
+		return new Point3D(x,y,z);
+	}
+
+    
+	public double getR(JulianDay jd){
+        
+		/** orbital eccentricty e */
+		double e = comet.getOrbitalEccentricity();
+
+		/** perihelion distance q */
+		double q = comet.getPerihelionDistance();
+		
+		/** True anomaly (nu) in degrees*/
+		double nu = 0d;
+        
+		if (isParabolic()) {
+		    nu = getNu(e, q, jd);
+		}else{
+		    double M = getMeanAnomaly(jd);
+		    double E = getEccentricAnomaly(e, M);
+		    nu = getNu(e, E);
+		}
+        
+		/** heliocentric distance to comet r in au */
+		double r = getR(q, e, nu);
+		return r;
+	}
+
+	public double getNu(JulianDay jd){
+        
+		/** orbital eccentricty e */
+		double e = comet.getOrbitalEccentricity();
+
+		/** perihelion distance q */
+		double q = comet.getPerihelionDistance();
+		
+		/** True anomaly (nu) in degrees*/
+		double nu = 0d;
+        
+		if (isParabolic()) {
+		    nu = getNu(e, q, jd);
+		}else{
+		    double M = getMeanAnomaly(jd);
+		    double E = getEccentricAnomaly(e, M);
+		    nu = getNu(e, E);
+		}
+        
+		/** heliocentric distance to comet r in au */
+		double r = getR(q, e, nu);
+		return nu;
+	}
+	
+    /** Heliocentric position Vector  (x, y, z) 
+		//Ecliptic Coordinates
+        */
+    public Point3D getHeliocentricEclipticPosition(JulianDay jd){
+        /** orbit inclination  */
+        double i = Math.toRadians(comet.getInclination());
+
+        /** argumentOfPerihelion w or lowwr case omega */
+        double peri = Math.toRadians(comet.getArgumentOfPerihelion());
+
+        /** longitudeAscendingNode Capital Omega */
+        double node = Math.toRadians(comet.getLongitudeAscendingNode());
+        Point2D p2d = getOrbitPlanePosition(jd);
+        double x = p2d.getX();
+        double y = p2d.getY();
+
+        double xEcliptic = (Math.cos(peri) * Math.cos(node) - Math.sin(peri) * Math.sin(node) * Math.cos(i)) * x 
+                + (-Math.sin(peri) * Math.cos(node) - Math.cos(peri) * Math.sin(node) * Math.cos(i)) * y;
+        double yEcliptic  = (Math.cos(peri) * Math.sin(node) + Math.sin(peri) * Math.cos(node) * Math.cos(i)) * x 
+                + (-Math.sin(peri) * Math.sin(node) + Math.cos(peri) * Math.cos(node) * Math.cos(i)) * y;
+        double zEcliptic  = (Math.sin(peri) * Math.sin(i)) * x
+                 + (Math.cos(peri) * Math.sin(i)) * y;
+        return new Point3D(xEcliptic,yEcliptic,zEcliptic);
+    }
+
+    /** 
+		Velocity Vector  (x', y') 
+		planer Coordinates
+	*/
+    public Vector2D getOrbitPlaneVelocity2(JulianDay jd){
+        //JulianDay jd1 = new JulianDay(jd.getJulianDay() - 0.5d);
+        //JulianDay jd2 = new JulianDay(jd.getJulianDay() + 0.5d);
+        JulianDay jd1 = new JulianDay(jd.getJulianDay() - 1d/day);
+        JulianDay jd2 = new JulianDay(jd.getJulianDay() + 1d/day);
+        Point2D cometPosition1 = getOrbitPlanePosition(jd1);
+        Point2D cometPosition2 = getOrbitPlanePosition(jd2);        
+        double deltaX = cometPosition2.getX() - cometPosition1.getX();
+        double deltaY = cometPosition2.getY() - cometPosition1.getY();
+        //double xPrime = au* deltaX/day;
+        //double yPrime = au* deltaY/day;
+        double dt = jd2.getJulianDay() - jd1.getJulianDay();
+        double xPrime = deltaX/dt;
+        double yPrime = deltaY/dt;
+        return new Vector2D(xPrime, yPrime);
+    }
+    
+	/** 
+		Ecliptic Velocity Vector  (x', y', z') 
+	*/
+	public Vector3D getEclipticVelocityVector(JulianDay jd){
+		//JulianDay jd1 = new JulianDay(jd.getJulianDay() - 0.5d);
+		//JulianDay jd2 = new JulianDay(jd.getJulianDay() + 0.5d);
+		JulianDay jd1 = new JulianDay(jd.getJulianDay() - 1d/day);
+		JulianDay jd2 = new JulianDay(jd.getJulianDay() + 1d/day);
+		Point3D cometPosition1 = getHeliocentricEclipticPosition(jd1);
+		Point3D cometPosition2 = getHeliocentricEclipticPosition(jd2);        
+		double deltaX = cometPosition2.getX() - cometPosition1.getX();
+		double deltaY = cometPosition2.getY() - cometPosition1.getY();
+		double deltaZ = cometPosition2.getZ() - cometPosition1.getZ();
+		//double xPrime = au* deltaX/day;
+		//double yPrime = au* deltaY/day;
+		//double zPrime = au* deltaZ/day;
+		double dt = jd2.getJulianDay() - jd1.getJulianDay();
+		double xPrime = deltaX/dt;
+		double yPrime = deltaY/dt;
+		double zPrime = deltaZ/dt;
+		return new Vector3D(xPrime, yPrime, zPrime);
+	}
+	
+	
+	/** 
+		Equatorial Velocity Vector  (x', y', z') 
+	*/
+	public Vector3D getVelocityVector(JulianDay jd){
+		return getEquatorialVelocityVector(jd);
+	}
+		
+	/** 
+		Equatorial Velocity Vector  (x', y', z') 
+	*/
+	public Vector3D getEquatorialVelocityVector(JulianDay jd){
+		//JulianDay jd1 = new JulianDay(jd.getJulianDay() - 0.5d);
+		//JulianDay jd2 = new JulianDay(jd.getJulianDay() + 0.5d);
+		JulianDay jd1 = new JulianDay(jd.getJulianDay() - 1d/day);
+		JulianDay jd2 = new JulianDay(jd.getJulianDay() + 1d/day);
+		Point3D cometPosition1 = getHeliocentricEquatorialPosition(jd1);
+		Point3D cometPosition2 = getHeliocentricEquatorialPosition(jd2);        
+		double deltaX = cometPosition2.getX() - cometPosition1.getX();
+		double deltaY = cometPosition2.getY() - cometPosition1.getY();
+		double deltaZ = cometPosition2.getZ() - cometPosition1.getZ();
+		//double xPrime = au* deltaX/day;
+		//double yPrime = au* deltaY/day;
+		//double zPrime = au* deltaZ/day;
+		double dt = jd2.getJulianDay() - jd1.getJulianDay();
+		double xPrime = deltaX/dt;
+		double yPrime = deltaY/dt;
+		double zPrime = deltaZ/dt;
+		return new Vector3D(xPrime, yPrime, zPrime);
+	}
+    
+	/** 
+		delta is distance from earth to comet in au 
+	*/
+	    
+	public double getDelta(Point3D cometPosition, Point3D earthPosition){
+		double dx = cometPosition.getX() - earthPosition.getX();
+		double dy = cometPosition.getY() - earthPosition.getY();
+		double dz = cometPosition.getZ() - earthPosition.getZ();
+		return Math.sqrt(dx*dx + dy*dy + dz*dz);
+	}
+    
+	/** 
+		arcsinh(x) = ln(x = sqrt(x^2 + 1)
+		Note: java.lang.Math implenets no inverse hyperbolic methods.
+	*/
+	double asinh(double x) {
+		return Math.log(x + Math.sqrt(x * x + 1.0d));
+	}
+
+	/** 
+		arccosh(x) = ln(x + sqrt(x^2 - 1)  for x > 1 
+		http://mathworld.wolfram.com/InverseHyperbolicCosine.html
+		Note: java.lang.Math implenets no inverse hyperbolic methods.
+	*/
+	double acosh(double x) {
+		if (x <=  1) System.err.println("x <=  1 invalid ");
+		return Math.log(x + Math.sqrt(x * x - 1.0d));
+	}
+
+	/** 
+		arctanh(x) = 1/2 ln( (1+ x)/(1 - x))
+		Note: java.lang.Math implenets no inverse hyperbolic methods.
+	*/
+	double atanh(double x) {
+		return Math.log((1 + x)/(1d - x))/2.0d;
+	}
+
+	/**
+		returns a String which is the value of the input value rounded to the nth decimal
+	*/
+	public String round(double input, int n){
+		double p = Math.pow(10d,(double)n);
+		double q = Math.floor(p * input + 0.5d);
+		String s = String.valueOf(q/p);
+		String t = s.substring(s.indexOf("."));
+		while (t.length()<= n){
+		    s = s + "0";
+		    t = s.substring(s.indexOf("."));
+		}
+		return s;
+	}
+    
+    
+	public String toMPC8Line(){
+		String[] months = {"Jan.", "Feb.", "Mar.", "Apr.", "May", 
+		    "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."};
+
+		String s = comet.getName() + "\n\n";
+		s = s + "Epoch " + comet.getEpochYear()
+		    + " " + months[comet.getEpochMonth()-1]
+		    + " " + comet.getEpochDay()
+		    + " TT = JDT " 
+		    + new JulianDay(comet.getEpochYear(), comet.getEpochMonth(), comet.getEpochDay()).toString()
+		    + "\n";
+		s = s + "T " + comet.getPerihelionYear() 
+			+ " " + months[comet.getPerihelionMonth()-1]
+			+ " " + comet.getPerihelionDay() + " TT\n";
+		    s = s + "q   " + round(comet.getPerihelionDistance(), 6);
+		    s = s + "             (2000.0)            P               Q" + "\n";
+		    
+		Point3D P = getVectorP();
+		Point3D Q = getVectorQ();
+		String Px = round(P.getX(), 7);
+		String Py = round(P.getY(), 7);
+		String Pz = round(P.getZ(), 7);
+		String Qx = round(Q.getX(), 7);
+		String Qy = round(Q.getY(), 7);
+		String Qz = round(Q.getZ(), 7);
+		if (P.getX() > 0) Px = "+"+ Px;
+		if (P.getY() > 0) Py = "+"+ Py;
+		if (P.getZ() > 0) Pz = "+"+ Pz;
+		if (Q.getX() > 0) Qx = "+"+ Qx;
+		if (Q.getY() > 0) Qy = "+"+ Qy;
+		if (Q.getZ() > 0) Qz = "+"+ Qz;
+		if (comet.getOrbitType().equals("P")){
+		    double a = getSemiMajorAxis();
+		    double n = getMeanDailyMotion();
+		    s = s + "n   " + round(n, 7);
+		    s = s + "      Peri.  " + round(comet.getArgumentOfPerihelion(), 4);
+		    s = s + "      " + Px + "      " + Qx;
+		    s = s + "              T = " + round(getPerihelionJulianDay().getJulianDay(), 5) + " JDT\n";
+		    s = s + "a   " + round(a, 6);
+		    s = s + "       Node   " + round(comet.getLongitudeAscendingNode(), 4);
+		    s = s + "      " + Py + "      " + Qy;
+		    s = s + "              q =     " + round(comet.getPerihelionDistance(), 7) + "\n";
+		}else{
+		    s = s + "                   " + "Peri.  " + round(comet.getArgumentOfPerihelion(), 4); 
+		    s = s + "      " + Px + "      " + Qx;
+		    s = s + "              T = " + round(getPerihelionJulianDay().getJulianDay(), 5) + " JDT\n";
+		    s = s + "                   " + "Node   " + round(comet.getLongitudeAscendingNode(), 4);  
+		    s = s + "      " + Py + "      " + Qy + "\n";
+		}
+		s = s + "e   " + round(comet.getOrbitalEccentricity(), 6);
+		s = s +  "       Incl.  " + round(comet.getInclination(), 4);
+		s = s + "      " + Pz + "      " + Qz + "\n";
+		if (comet.getOrbitType().equals("P")){
+		    double period = getOrbitalPeriod();
+		    s = s + "P   " + round(period, 2)  + "\n";
+		}
+		double z = getReciprocalSemiMajorAxis();
+		s = s + "z   or 1/a " + round(z, 6)  + "\n";
+		return s;
+	}
+}
