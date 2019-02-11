@@ -1,0 +1,91 @@
+/**
+ * 
+ * @author Charles Bell  
+ */
+public class GeneralComet {
+    public String name = "";
+    public double epochJD = 0d;
+    public double perihelionDateJD = 0d;
+    public double perihelionDistance = 0d;
+    public double eccentricity = 0d;
+    public double inclination = 0d;
+    public double longitudeOfAscendingNode = 0d;
+    public double argumentOfPerihelion = 0d;
+
+
+    public GeneralComet(){
+
+    }
+    public GeneralComet(String name, double epochJD, double perihelionDateJD,
+            double perihelionDistance, double eccentricity, double inclination,
+            double longitudeOfAscendingNode, double argumentOfPerihelion) {
+
+        this.name = name;
+        this.epochJD = epochJD;
+        this.perihelionDateJD = perihelionDateJD;
+        this.perihelionDistance = perihelionDistance;
+        this.eccentricity = eccentricity;
+        this.inclination = inclination;
+        this.longitudeOfAscendingNode = longitudeOfAscendingNode;
+        this.argumentOfPerihelion = argumentOfPerihelion;
+
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public double getEpochJD() {
+        return epochJD;
+    }
+
+    public double getPerihelionDistance() {
+        return perihelionDateJD;
+    }
+
+    public double getEccentricity() {
+        return eccentricity;
+    }
+
+    public double geInclination() {
+        return inclination;
+    }
+
+    public double getLongitudeOfAscendingNode() {
+        return longitudeOfAscendingNode;
+    }
+
+    public double getArgumentOfPerihelion() {
+        return argumentOfPerihelion;
+    }
+
+    
+   public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setEpochJD(double epochJD) {
+        this.epochJD = epochJD;
+    }
+
+    public void setPerihelionDistance(double perihelionDateJD) {
+        this.perihelionDateJD = perihelionDateJD;
+    }
+
+    public void setEccentricity(double eccentricity) {
+        this.eccentricity = eccentricity;
+    }
+
+    public void seInclination(double inclination) {
+        this.inclination = inclination;
+    }
+
+    public void setLongitudeOfAscendingNode(double longitudeOfAscendingNode) {
+        this.longitudeOfAscendingNode = longitudeOfAscendingNode;
+    }
+
+    public void setArgumentOfPerihelion(double argumentOfPerihelion) {
+        this.argumentOfPerihelion = argumentOfPerihelion;
+    }
+
+}
