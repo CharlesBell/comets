@@ -1,6 +1,6 @@
 /**
  * 
- * @author Charles Bell <cbellh47 at gmail.com>
+ * @author Charles Bell
  */
 public class JPLComet extends Comet{
     public String name;
